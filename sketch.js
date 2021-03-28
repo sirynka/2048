@@ -1,13 +1,14 @@
 class Cell {
-  constructor(pos, size, value) {
+  constructor(pos, value) {
     this.pos = pos;
-    this.size = size;
     this.value = value;
-    this.drawPos = p5.Vector.mult(pos, size);
+    this.size = width / boardSize;
+    this.drawPos = p5.Vector.mult(pos, this.size);
   }
 
   draw() {
     const padding = 2;
+    this.size = width / boardSize;
     this.drawPos = p5.Vector.lerp(
       this.drawPos,
       p5.Vector.mult(this.pos, this.size),
@@ -39,10 +40,7 @@ class Board {
     this.board =
       new Array(this.size ** 2)
         .fill(0).map((v, i) =>
-          new Cell(
-            this.i2v(i),
-            width / this.size,
-            0),
+          new Cell(this.i2v(i), 0),
         );
   }
 
@@ -83,29 +81,28 @@ class Board {
     const currCell = this.board[currIdx];
     const nextCell = this.board[nextIdx];
     if (!currCell.value) return;
-    if (nextCell.value == 0) {
-      [currCell.pos, nextCell.pos] = [nextCell.pos, currCell.pos];
-      [this.board[currIdx], this.board[nextIdx]] = [this.board[nextIdx], this.board[currIdx]];
-    }
+    const swap = nextCell.value == 0 || currCell.value == nextCell.value;
     if (currCell.value == nextCell.value) {
       currCell.value *= 2; nextCell.value *= 0;
+    }
+    if (swap) {
       [currCell.pos, nextCell.pos] = [nextCell.pos, currCell.pos];
       [this.board[currIdx], this.board[nextIdx]] = [this.board[nextIdx], this.board[currIdx]];
     }
   }
 
-  move(key, dir) {
+  move(key) {
     const key2forLoop = {
-      [UP_ARROW]: this.forEachBottomUp,
-      [DOWN_ARROW]: this.forEachUpBottom,
-      [LEFT_ARROW]: this.forEachRightLeft,
-      [RIGHT_ARROW]: this.forEachLeftRight,
+      [UP_ARROW]:    [this.forEachBottomUp,  createVector(  0, -1)],
+      [DOWN_ARROW]:  [this.forEachUpBottom,  createVector(  0,  1)],
+      [LEFT_ARROW]:  [this.forEachRightLeft, createVector( -1,  0)],
+      [RIGHT_ARROW]: [this.forEachLeftRight, createVector(  1,  0)],
     };
 
-    const forLoop = key2forLoop[key];
+    const [forLoop, dir] = key2forLoop[key];
 
     const boardBefore = this.board.map(cell => cell.value);
-    for (let i = 0; i < 4; i++) forLoop(pos => this.swapCells(pos, p5.Vector.add(pos, dir)), this.size);
+    for (let i = 0; i < this.size; i++) forLoop(pos => this.swapCells(pos, p5.Vector.add(pos, dir)), this.size);
     const boardAfter = this.board.map(cell => cell.value);
     const arrayCompare = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
     if (arrayCompare(boardBefore, boardAfter)) return;
@@ -122,18 +119,52 @@ class Board {
 }
 
 let board;
+const boardSize = 4;
+const maxCanvasSize = 600;
+let canvasSize = maxCanvasSize;
 
 function setup() {
-  createCanvas(400, 400);
-  board = new Board(4);
+  createCanvas(canvasSize, canvasSize);
+  board = new Board(boardSize);
   board.spawn();
 }
 
+function windowResized() {
+  let w = windowWidth * 0.8;
+  let h = windowHeight * 0.8;
+  canvasSize = Math.min(w, h, maxCanvasSize);
+  resizeCanvas(canvasSize, canvasSize);
+}
+
 function keyPressed() {
-  if (keyCode === UP_ARROW)    board.move(keyCode, createVector(  0, -1));
-  if (keyCode === DOWN_ARROW)  board.move(keyCode, createVector(  0,  1));
-  if (keyCode === LEFT_ARROW)  board.move(keyCode, createVector( -1,  0));
-  if (keyCode === RIGHT_ARROW) board.move(keyCode, createVector(  1,  0));
+  if (keyCode === UP_ARROW)    board.move(keyCode);
+  if (keyCode === DOWN_ARROW)  board.move(keyCode);
+  if (keyCode === LEFT_ARROW)  board.move(keyCode);
+  if (keyCode === RIGHT_ARROW) board.move(keyCode);
+}
+
+let mousePressPos;
+function mousePressed() {
+  mousePressPos = createVector(mouseX, mouseY);
+}
+
+function mouseReleased() {
+  const mouseReleasePos = createVector(mouseX, mouseY);
+  const mouseDiff = p5.Vector.sub(mouseReleasePos, mousePressPos);
+  let keyCode = undefined;
+
+  if (abs(mouseDiff.x) < abs(mouseDiff.y)) {
+    if (mouseDiff.y < 0) keyCode = UP_ARROW;
+    if (mouseDiff.y > 0) keyCode = DOWN_ARROW;
+  }
+
+  if (abs(mouseDiff.x) > abs(mouseDiff.y)) {
+    if (mouseDiff.x < 0) keyCode = LEFT_ARROW;
+    if (mouseDiff.x > 0) keyCode = RIGHT_ARROW;
+  }
+
+  if (keyCode)
+    board.move(keyCode);
 }
 
 function draw() {
